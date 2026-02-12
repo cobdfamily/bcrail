@@ -37,6 +37,10 @@
           type = "app";
           program = "${pkgs.bcrail}/bin/bcrail";
         };
+        docker = {
+          type = "app";
+          program = "${pkgs.bcrail}/bin/docker";
+        };
       });
 
       nixosModules.default = import ./nix/module.nix;
