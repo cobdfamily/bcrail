@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIBEXEC_DIR="${BIN_DIR}/../libexec/bcrail"
+
+cmd="${1:-}"
+shift || true
+
+if [[ -z "${cmd}" ]]; then
+  "${LIBEXEC_DIR}/bcrail-help"
+  exit 2
+fi
+
+subcmd="${LIBEXEC_DIR}/bcrail-${cmd}"
+if [[ ! -x "${subcmd}" ]]; then
+  echo "Unknown subcommand: ${cmd}" >&2
+  echo >&2
+  "${LIBEXEC_DIR}/bcrail-help" >&2
+  exit 2
+fi
+
+"${subcmd}" "$@"

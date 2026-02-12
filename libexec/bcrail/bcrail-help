@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cat <<'USAGE'
+Usage: bcrail <command>
+
+Commands:
+  setup        Setup the BCRail environment on a new host
+USAGE

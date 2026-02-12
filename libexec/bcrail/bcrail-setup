@@ -4,11 +4,11 @@
 
 set -euo pipefail
 
-echo "Setting up directories for CPRail..."
+echo "Setting up directories for BCRail..."
 
-mkdir -p /var/lib/cprail/contexts
+mkdir -p /var/lib/bcrail/contexts
 
-chmod 755 /var/lib/cprail/stacks
+chmod 755 /var/lib/bcrail
 
 echo "Changing the working directory to `/tmp`..."
 
@@ -51,18 +51,18 @@ echo "Creating an new profile for the instance..."
 
 # 💡 For a full list of instance options, see here. If you're unsure what to set here, you can always change this later.
 
-# 💡 To align with the project goal of invisibility, the project namespace of "cprail" is hereafter used where possible. This includes in the profile name below.
+# 💡 To align with the project goal of invisibility, the project namespace of "bcrail" is hereafter used where possible. This includes in the profile name below.
 
-incus profile create cprail
+incus profile create bcrail
 
-incus profile edit cprail << EOF
+incus profile edit bcrail << EOF
 ---
 config:
   limits.memory: 16GiB
   limits.cpu: 2
   boot.autostart: true
   security.secureboot: "false"
-description: CPRail
+description: BCRail
 devices:
   eth0:
     name: eth0
@@ -80,4 +80,4 @@ EOF
 
 echo "Initializing default context..."
 
-setcontext default ${VERSION}
+bcrail setcontext default ${VERSION}
