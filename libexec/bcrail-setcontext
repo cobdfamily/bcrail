@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CONTEXT_BASE="${1:-default}";
+CONTEXT_NAME="cprail-${CONTEXT_BASE}";
+CONTEXT_PATH="/var/lib/cprail/contexts/${CONTEXT_BASE}";
+VERSION="${2:-current}";
+
+echo "Initializing the ${CONTEXT_NAME} context..."
+
+mkdir -p "${CONTEXT_PATH}"
+chown 755 "${CONTEXT_PATH}"
+
+cd "${CONTEXT_PATH}"
+
+mkdir stacks
+mkdir keys
+chmod 755 keys
+
+mkdir config
+
+echo "${CONTEXT_NAME}" >.context
+
+echo "Generating keys..."
+SSH_KEY_BASE="${CONTEXT_PATH}/keys/${CONTEXT_NAME}"
+
+ssh-keygen -t ed25519 \
+  -f "$SSH_KEY_BASE"
+
+KEY="$(cat ${SSH_KEY_BASE}.pub)"
+
+jq --arg key "$KEY" \
+   '.passwd.users[].sshAuthorizedKeys = [$key]' \
+   "/var/lib/cprail/config/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
+
+sed -i "s/CONTEXT_PLACEHOLDER/${CONTEXT_BASE}/g" "${CONTEXT_PATH}/config/ignition.json"
+
+echo "Initializing new instance derived from the cprail profile..."
+
+incus create --profile cprail --vm local:"flatcar/${VERSION}" "${CONTEXT_NAME}"
+
+echo "Creating the mountpoint for the ${CONTEXT_NAME} context's stacks..."
+incus config device add "${CONTEXT_NAME}" stacks disk \
+  source=${CONTEXT_PATH}/stacks \
+  path=${CONTEXT_PATH}/stacks
+
+POOL="default";
+VOL="${CONTEXT_NAME}-state";
+SIZE="${SIZE:-64GiB}";                   # volume size
+DISK="NEW";
+
+echo "Ensuring storage volume exists..."
+if incus storage volume show "$POOL" "$VOL" >/dev/null 2>&1; then
+  echo "OK: volume exists: $POOL/$VOL"
+  DISK="EXISTS";
+else
+  echo "Creating volume: $POOL/$VOL size=$SIZE"
+  incus storage volume create "$POOL" "$VOL" --type=block size="$SIZE"
+fi
+
+echo "Attaching volume to ${CONTEXT_NAME} as device '$VOL'"
+incus config device add "${CONTEXT_NAME}" state disk pool="$POOL" source="$VOL"
+
+echo "Adding Ignition config..."
+incus config set "${CONTEXT_NAME}" raw.qemu - <<EOF
+-fw_cfg name=opt/org.flatcar-linux/config,file=${CONTEXT_PATH}/config/ignition.json
+EOF
+
+echo "Adapting apparmor..."
+incus config set "${CONTEXT_NAME}" raw.apparmor - <<EOF
+${CONTEXT_PATH}/config/ r,
+${CONTEXT_PATH}/config/** r,
+EOF
+
+echo "Starting the ${CONTEXT_NAME} context..."
+incus start "${CONTEXT_NAME}"
+
+if [ "$DISK" = "NEW" ]; then
+  echo "Formatting state disk for the context..."
+  sleep 120
+  ssh -i "${SSH_KEY_BASE}" vancouver@"$(resolve-incus-dns "${CONTEXT_NAME}")" \
+    "sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb /data"
+fi
+

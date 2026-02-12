@@ -1,0 +1,87 @@
+{
+  "ignition": {
+    "version": "3.4.0"
+  },
+  "passwd": {
+    "users": [
+      {
+        "groups": [
+          "sudo",
+          "docker"
+        ],
+        "name": "vancouver",
+        "sshAuthorizedKeys": [
+          "SSH_KEY_PLACEHOLDR"
+        ]
+      }
+    ]
+  },
+  "storage": {
+    "files": [
+      {
+        "path": "/opt/extensions/docker-compose/docker-compose-2.34.0-x86-64.raw",
+        "contents": {
+          "source": "https://extensions.flatcar.org/extensions/docker-compose-2.34.0-x86-64.raw"
+        },
+        "mode": 420
+      },
+      {
+        "path": "/etc/sysupdate.docker-compose.d/docker-compose.conf",
+        "contents": {
+          "source": "https://extensions.flatcar.org/extensions/docker-compose.conf"
+        },
+        "mode": 420
+      },
+      {
+        "path": "/etc/sysupdate.d/noop.conf",
+        "contents": {
+          "source": "https://extensions.flatcar.org/extensions/noop.conf"
+        },
+        "mode": 420
+      }
+    ],
+    "links": [
+      {
+        "path": "/etc/extensions/docker-compose.raw",
+        "hard": false,
+        "target": "/opt/extensions/docker-compose/docker-compose-2.34.0-x86-64.raw"
+      }
+    ]
+  },
+  "systemd": {
+    "units": [
+      {
+        "enabled": true,
+        "name": "systemd-sysupdate.timer"
+      },
+      {
+        "dropins": [
+          {
+            "contents": "[Service]\nExecStartPre=/usr/bin/sh -c \"readlink --canonicalize /etc/extensions/docker-compose.raw \u003e /tmp/docker-compose\"\nExecStartPre=/usr/lib/systemd/systemd-sysupdate -C docker-compose update\nExecStartPost=/usr/bin/sh -c \"readlink --canonicalize /etc/extensions/docker-compose.raw \u003e /tmp/docker-compose-new\"\nExecStartPost=/usr/bin/sh -c \"if ! cmp --silent /tmp/docker-compose /tmp/docker-compose-new; then touch /run/reboot-required; fi\"\n",
+            "name": "docker-compose.conf"
+          }
+        ],
+        "name": "systemd-sysupdate.service"
+      },
+      {
+        "contents": "[Unit]\nDescription=Mount Incus shared stacks directory\nDefaultDependencies=no\nBefore=local-fs.target\nAfter=systemd-modules-load.service\n\n[Mount]\nWhat=incus_stacks\nWhere=/var/lib/cprail/contexts/CONTEXT_PLACEHOLDER/stacks\nType=virtiofs\nOptions=defaults\n\n[Install]\nWantedBy=local-fs.target\n",
+        "enabled": true,
+        "name": "var-lib-cprail-contexts-CONTEXT_PLACEHOLDER-stacks.mount"
+      },
+      {
+        "contents": "[Unit]\nDescription=Mount Incus shared mounts directory\nDefaultDependencies=no\nBefore=local-fs.target\nAfter=systemd-modules-load.service\n\n[Mount]\nWhat=/dev/sdb\nWhere=/data\nType=ext4\nOptions=defaults\n\n[Install]\nWantedBy=local-fs.target\n",
+        "enabled": true,
+        "name": "data.mount"
+      },
+      {
+        "dropins": [
+          {
+            "contents": "[Unit]\nRequires=var-lib-cprail-contexts-CONTEXT_PLACEHOLDER-stacks.mount data.mount\nAfter=var-lib-cprail-contexts-CONTEXT_PLACEHOLDER-stacks.mount data.mount\nRequiresMountsFor=/var/lib/cprail/contexts/CONTEXT_PLACEHOLDER/stacks /data",
+            "name": "10-cprail-mounts.conf"
+          }
+        ],
+        "name": "docker.service"
+      }
+    ]
+  }
+}

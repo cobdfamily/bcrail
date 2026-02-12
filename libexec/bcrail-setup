@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# With gratitude to the following:
+# Flatcar Container Linux UEFI Setup Under Incus on Debian on GitHub: <https://gist.github.com/joshenders/1f67ceacaadc066e43e2312119e03533>
+
+set -euo pipefail
+
+echo "Setting up directories for CPRail..."
+
+mkdir -p /var/lib/cprail/contexts
+
+chmod 755 /var/lib/cprail/stacks
+
+echo "Changing the working directory to `/tmp`..."
+
+cd /tmp
+
+echo "Seting variables for convenience..."
+
+export CHANNEL="stable"
+export VERSION="current"
+export IMAGE_BASENAME="flatcar_production_qemu_uefi"
+export OVMF_DIR="/opt/incus/share/qemu"
+
+echo "Downloading UEFI image + OMVF files for flatcar:${VERSION}..."
+
+# 💡 Flatcar does not yet officially support UEFI secure boot.
+
+wget "https://${CHANNEL}.release.flatcar-linux.net/amd64-usr/${VERSION}/${IMAGE_BASENAME}_image.img"
+
+echo "Creating metadata file for image and compressing..."
+
+cat << EOF > metadata.yaml
+---
+architecture: x86_64
+creation_date: $(date +%s)
+properties:
+    description: ${IMAGE_BASENAME}_image
+    os: Flatcar
+    release: ${VERSION}
+EOF
+
+tar -cvzf metadata.tar.gz metadata.yaml
+
+echo "Importing metadata and image to local image repository..."
+
+incus image import metadata.tar.gz "${IMAGE_BASENAME}_image.img" --alias "flatcar/${VERSION}"
+
+echo "Creating an new profile for the instance..."
+
+# 💡 This profile is configured for 16GiB of memory, 2 CPUs, 16GiB root disk, setting the instance to autostart on boot and disabling secureboot as the EFI image of Flatcar we're using is unsigned. It uses some advanced directives for overridng the generated qemu and apparmor configuration.
+
+# 💡 For a full list of instance options, see here. If you're unsure what to set here, you can always change this later.
+
+# 💡 To align with the project goal of invisibility, the project namespace of "cprail" is hereafter used where possible. This includes in the profile name below.
+
+incus profile create cprail
+
+incus profile edit cprail << EOF
+---
+config:
+  limits.memory: 16GiB
+  limits.cpu: 2
+  boot.autostart: true
+  security.secureboot: "false"
+description: CPRail
+devices:
+  eth0:
+    name: eth0
+    nictype: bridged
+    parent: incusbr0
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+    size: 16GiB
+name: flatcar
+used_by:
+EOF
+
+echo "Initializing default context..."
+
+setcontext default ${VERSION}
