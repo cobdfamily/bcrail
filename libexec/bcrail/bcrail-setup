@@ -4,11 +4,19 @@
 
 set -euo pipefail
 
+BCRAIL_STATE_DIR="${BCRAIL_STATE_DIR:-/var/lib/bcrail}"
+BCRAIL_CONFIG_DIR="${BCRAIL_CONFIG_DIR:-/etc/bcrail}"
+
 echo "Setting up directories for BCRail..."
 
-mkdir -p /var/lib/bcrail/contexts
+mkdir -p "${BCRAIL_STATE_DIR}/contexts" "${BCRAIL_CONFIG_DIR}"
 
-chmod 755 /var/lib/bcrail
+chmod 755 "${BCRAIL_STATE_DIR}"
+
+if [[ ! -f "${BCRAIL_CONFIG_DIR}/ignition.json" ]]; then
+  echo "Missing ${BCRAIL_CONFIG_DIR}/ignition.json; aborting." >&2
+  exit 1
+fi
 
 echo "Changing the working directory to `/tmp`..."
 
@@ -74,7 +82,7 @@ devices:
     pool: default
     type: disk
     size: 16GiB
-name: flatcar
+name: bcrail
 used_by:
 EOF
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIBEXEC_DIR="${BIN_DIR}/../libexec/bcrail"
+LIBEXEC_DIR="${BCRAIL_LIBEXEC_DIR:-${BIN_DIR}/../libexec/bcrail}"
 
 cmd="${1:-}"
 shift || true

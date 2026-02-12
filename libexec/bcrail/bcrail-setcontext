@@ -2,15 +2,18 @@
 
 set -euo pipefail
 
+BCRAIL_STATE_DIR="${BCRAIL_STATE_DIR:-/var/lib/bcrail}"
+BCRAIL_CONFIG_DIR="${BCRAIL_CONFIG_DIR:-/etc/bcrail}"
+
 CONTEXT_BASE="${1:-default}";
-CONTEXT_NAME="cprail-${CONTEXT_BASE}";
-CONTEXT_PATH="/var/lib/cprail/contexts/${CONTEXT_BASE}";
+CONTEXT_NAME="bcrail-${CONTEXT_BASE}";
+CONTEXT_PATH="${BCRAIL_STATE_DIR}/contexts/${CONTEXT_BASE}";
 VERSION="${2:-current}";
 
 echo "Initializing the ${CONTEXT_NAME} context..."
 
 mkdir -p "${CONTEXT_PATH}"
-chown 755 "${CONTEXT_PATH}"
+chmod 755 "${CONTEXT_PATH}"
 
 cd "${CONTEXT_PATH}"
 
@@ -26,19 +29,20 @@ echo "Generating keys..."
 SSH_KEY_BASE="${CONTEXT_PATH}/keys/${CONTEXT_NAME}"
 
 ssh-keygen -t ed25519 \
-  -f "$SSH_KEY_BASE"
+  -f "$SSH_KEY_BASE" \
+  -N ""
 
 KEY="$(cat ${SSH_KEY_BASE}.pub)"
 
 jq --arg key "$KEY" \
    '.passwd.users[].sshAuthorizedKeys = [$key]' \
-   "/var/lib/cprail/config/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
+   "/etc/bcrail/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
 
 sed -i "s/CONTEXT_PLACEHOLDER/${CONTEXT_BASE}/g" "${CONTEXT_PATH}/config/ignition.json"
 
-echo "Initializing new instance derived from the cprail profile..."
+echo "Initializing new instance derived from the bcrail profile..."
 
-incus create --profile cprail --vm local:"flatcar/${VERSION}" "${CONTEXT_NAME}"
+incus create --profile bcrail --vm local:"flatcar/${VERSION}" "${CONTEXT_NAME}"
 
 echo "Creating the mountpoint for the ${CONTEXT_NAME} context's stacks..."
 incus config device add "${CONTEXT_NAME}" stacks disk \
@@ -82,4 +86,3 @@ if [ "$DISK" = "NEW" ]; then
   ssh -i "${SSH_KEY_BASE}" vancouver@"$(resolve-incus-dns "${CONTEXT_NAME}")" \
     "sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb /data"
 fi
-
