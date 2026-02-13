@@ -58,6 +58,8 @@ Output fields:
 - `BCRAIL_LOCOMOTIVE_ENV_LOADED` (`yes`/`no`)
 - `BCRAIL_NETWORK_BRIDGE`
 - `BCRAIL_STORAGE_POOL`
+- `BCRAIL_REMOTE_USER`
+- `BCRAIL_STATE_DEVICE`
 
 Example:
 
@@ -80,6 +82,8 @@ Relevant variables:
 - `BCRAIL_STATE_DIR` (default: `/var/lib/bcrail`)
 - `BCRAIL_CONFIG_DIR` (default: `/etc/bcrail`)
 - `BCRAIL_CONTEXT_FILE` (default: `~/.bcrail`)
+- `BCRAIL_REMOTE_USER` (default: `vancouver`)
+- `BCRAIL_STATE_DEVICE` (default: empty; auto-detect in guest when creating a new state disk)
 
 Show the effective resolved values with:
 

@@ -6,6 +6,8 @@ BCRAIL_CONFIG_DIR="${BCRAIL_CONFIG_DIR:-/etc/bcrail}"
 BCRAIL_LOCOMOTIVE_ENV="${BCRAIL_LOCOMOTIVE_ENV:-${BCRAIL_CONFIG_DIR}/locomotive.env}"
 BCRAIL_STORAGE_POOL="${BCRAIL_STORAGE_POOL:-default}"
 BCRAIL_CONTEXT_FILE="${BCRAIL_CONTEXT_FILE:-${HOME}/.bcrail}"
+BCRAIL_REMOTE_USER="${BCRAIL_REMOTE_USER:-vancouver}"
+BCRAIL_STATE_DEVICE="${BCRAIL_STATE_DEVICE:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -x "${SCRIPT_DIR}/../../bin/bcrail" ]]; then
   BCRAIL_CMD="${SCRIPT_DIR}/../../bin/bcrail"
@@ -113,13 +115,30 @@ incus start "${CONTEXT_NAME}" >/dev/null 2>&1 || true
 
 if [[ "${DISK}" == "NEW" ]]; then
   echo "Formatting state disk for the context..."
+  remote_host="${BCRAIL_REMOTE_USER}@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")"
   for _ in $(seq 1 30); do
     if ssh -o BatchMode=yes -o ConnectTimeout=5 -i "${SSH_KEY_BASE}" \
-      "vancouver@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")" true >/dev/null 2>&1; then
+      "${remote_host}" true >/dev/null 2>&1; then
       break
     fi
     sleep 4
   done
-  ssh -i "${SSH_KEY_BASE}" "vancouver@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")" \
-    "sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb /data"
+
+  state_device="${BCRAIL_STATE_DEVICE}"
+  if [[ -z "${state_device}" ]]; then
+    if ssh -i "${SSH_KEY_BASE}" "${remote_host}" "[ -b /dev/sdb ]"; then
+      state_device="/dev/sdb"
+    else
+      state_device="$(ssh -i "${SSH_KEY_BASE}" "${remote_host}" \
+        'root_src=$(findmnt -n -o SOURCE / || true); root_disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null || true); lsblk -dn -o NAME,TYPE | awk -v root="$root_disk" '"'"'$2=="disk" && $1!=root {print "/dev/"$1; exit}'"'"'')"
+    fi
+  fi
+
+  if [[ -z "${state_device}" ]]; then
+    echo "Unable to determine state device inside guest. Set BCRAIL_STATE_DEVICE and retry." >&2
+    exit 2
+  fi
+
+  ssh -i "${SSH_KEY_BASE}" "${remote_host}" \
+    "sudo mkdir -p /data; sudo blkid '${state_device}' >/dev/null 2>&1 || sudo mkfs.ext4 '${state_device}'; mountpoint -q /data || sudo mount '${state_device}' /data"
 fi
