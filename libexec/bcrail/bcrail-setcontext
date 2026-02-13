@@ -109,7 +109,7 @@ fi
 incus config device add "${CONTEXT_NAME}" state disk pool="${POOL}" source="${VOL}"
 
 echo "Adding Ignition config..."
-incus config set "${CONTEXT_NAME}" raw.qemu "-fw_cfg name=opt/org.flatcar-linux/config,file=${CONTEXT_PATH}/config/ignition.json"
+incus config set "${CONTEXT_NAME}" raw.qemu -- "-fw_cfg name=opt/org.flatcar-linux/config,file=${CONTEXT_PATH}/config/ignition.json"
 
 echo "Adapting apparmor..."
 incus config set "${CONTEXT_NAME}" raw.apparmor "${CONTEXT_PATH}/config/ r,
