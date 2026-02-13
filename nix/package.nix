@@ -15,6 +15,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     cp -r bin/. "$out/bin/"
     cp -r libexec/bcrail/. "$out/libexec/bcrail/"
     cp etc/bcrail/ignition.json "$out/share/bcrail/ignition.json"
+    cp etc/bcrail/locomotive.env "$out/share/bcrail/locomotive.env"
 
     patchShebangs "$out/bin" "$out/libexec"
 

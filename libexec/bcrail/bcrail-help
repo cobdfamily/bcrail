@@ -5,5 +5,7 @@ cat <<'USAGE'
 Usage: bcrail <command>
 
 Commands:
+  config       Print resolved runtime configuration
   setup        Setup the BCRail environment on a new host
+  setcontext   Initialize a new bcrail context
 USAGE

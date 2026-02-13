@@ -4,6 +4,15 @@ set -euo pipefail
 
 BCRAIL_STATE_DIR="${BCRAIL_STATE_DIR:-/var/lib/bcrail}"
 BCRAIL_CONFIG_DIR="${BCRAIL_CONFIG_DIR:-/etc/bcrail}"
+BCRAIL_LOCOMOTIVE_ENV="${BCRAIL_LOCOMOTIVE_ENV:-${BCRAIL_CONFIG_DIR}/locomotive.env}"
+BCRAIL_STORAGE_POOL="${BCRAIL_STORAGE_POOL:-default}"
+
+if [[ -f "${BCRAIL_LOCOMOTIVE_ENV}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${BCRAIL_LOCOMOTIVE_ENV}"
+  set +a
+fi
 
 CONTEXT_BASE="${1:-default}";
 CONTEXT_NAME="bcrail-${CONTEXT_BASE}";
@@ -36,7 +45,7 @@ KEY="$(cat ${SSH_KEY_BASE}.pub)"
 
 jq --arg key "$KEY" \
    '.passwd.users[].sshAuthorizedKeys = [$key]' \
-   "/etc/bcrail/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
+   "${BCRAIL_CONFIG_DIR}/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
 
 sed -i "s/CONTEXT_PLACEHOLDER/${CONTEXT_BASE}/g" "${CONTEXT_PATH}/config/ignition.json"
 
@@ -49,7 +58,7 @@ incus config device add "${CONTEXT_NAME}" stacks disk \
   source=${CONTEXT_PATH}/stacks \
   path=${CONTEXT_PATH}/stacks
 
-POOL="default";
+POOL="${BCRAIL_STORAGE_POOL}";
 VOL="${CONTEXT_NAME}-state";
 SIZE="${SIZE:-64GiB}";                   # volume size
 DISK="NEW";

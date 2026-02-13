@@ -26,10 +26,28 @@ in
       description = "Configuration directory used by bcrail.";
     };
 
+    network.bridge = lib.mkOption {
+      type = lib.types.str;
+      default = "incusbr0";
+      description = "Incus bridge name used for VM NIC attachment.";
+    };
+
+    storage.pool = lib.mkOption {
+      type = lib.types.str;
+      default = "default";
+      description = "Incus storage pool used for root and state volumes.";
+    };
+
     ignitionFile = lib.mkOption {
       type = lib.types.path;
       default = ../etc/bcrail/ignition.json;
       description = "Ignition JSON template to deploy at /etc/bcrail/ignition.json.";
+    };
+
+    locomotiveEnvFile = lib.mkOption {
+      type = lib.types.path;
+      default = ../etc/bcrail/locomotive.env;
+      description = "Environment file deployed at /etc/bcrail/locomotive.env.";
     };
 
     setupOnBoot = lib.mkOption {
@@ -43,6 +61,7 @@ in
     environment.systemPackages = [ cfg.package ];
 
     environment.etc."bcrail/ignition.json".source = cfg.ignitionFile;
+    environment.etc."bcrail/locomotive.env".source = cfg.locomotiveEnvFile;
 
     systemd.tmpfiles.rules = [
       "d ${cfg.stateDir} 0755 root root -"
@@ -52,6 +71,8 @@ in
     environment.variables = {
       BCRAIL_STATE_DIR = cfg.stateDir;
       BCRAIL_CONFIG_DIR = cfg.configDir;
+      BCRAIL_NETWORK_BRIDGE = cfg.network.bridge;
+      BCRAIL_STORAGE_POOL = cfg.storage.pool;
     };
 
     systemd.services.bcrail-setup = lib.mkIf cfg.setupOnBoot {
@@ -64,6 +85,8 @@ in
         Environment = [
           "BCRAIL_STATE_DIR=${cfg.stateDir}"
           "BCRAIL_CONFIG_DIR=${cfg.configDir}"
+          "BCRAIL_NETWORK_BRIDGE=${cfg.network.bridge}"
+          "BCRAIL_STORAGE_POOL=${cfg.storage.pool}"
         ];
       };
       path = [ cfg.package ];
