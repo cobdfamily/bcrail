@@ -12,11 +12,28 @@ if ! command -v incus >/dev/null 2>&1; then
   exit 2
 fi
 
-ip="$(
-  incus list --format csv -c n4 \
-    | awk -F, -v name="${instance}" '$1 == name {print $2; exit}' \
-    | awk '{print $1}'
-)"
+ip=""
+if command -v jq >/dev/null 2>&1; then
+  ip="$(
+    incus list --format json \
+      | jq -r --arg name "${instance}" '
+          map(select(.name == $name))[0].state.network
+          | to_entries
+          | map(.value.addresses // [])
+          | flatten
+          | map(select(.family == "inet"))
+          | .[0].address // ""
+        '
+  )"
+fi
+
+if [[ -z "${ip}" ]]; then
+  ip="$(
+    incus list --format csv -c n4 \
+      | awk -F, -v name="${instance}" '$1 == name {print $2; exit}' \
+      | awk '{print $1}'
+  )"
+fi
 
 if [[ -z "${ip}" ]]; then
   echo "Could not resolve IP for instance: ${instance}" >&2

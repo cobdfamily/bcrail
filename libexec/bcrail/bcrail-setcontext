@@ -39,6 +39,11 @@ CONTEXT_BASE="${1:-default}"
 CONTEXT_NAME="bcrail-${CONTEXT_BASE}"
 CONTEXT_PATH="${BCRAIL_STATE_DIR}/contexts/${CONTEXT_BASE}"
 VERSION="${2:-current}"
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o ConnectTimeout=10
+  -o StrictHostKeyChecking=accept-new
+)
 
 mkdir -p "$(dirname "${BCRAIL_CONTEXT_FILE}")"
 printf '%s\n' "${CONTEXT_BASE}" > "${BCRAIL_CONTEXT_FILE}"
@@ -117,7 +122,7 @@ if [[ "${DISK}" == "NEW" ]]; then
   echo "Formatting state disk for the context..."
   remote_host="${BCRAIL_REMOTE_USER}@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")"
   for _ in $(seq 1 30); do
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 -i "${SSH_KEY_BASE}" \
+    if ssh "${SSH_OPTS[@]}" -i "${SSH_KEY_BASE}" \
       "${remote_host}" true >/dev/null 2>&1; then
       break
     fi
@@ -126,10 +131,10 @@ if [[ "${DISK}" == "NEW" ]]; then
 
   state_device="${BCRAIL_STATE_DEVICE}"
   if [[ -z "${state_device}" ]]; then
-    if ssh -i "${SSH_KEY_BASE}" "${remote_host}" "[ -b /dev/sdb ]"; then
+    if ssh "${SSH_OPTS[@]}" -i "${SSH_KEY_BASE}" "${remote_host}" "[ -b /dev/sdb ]"; then
       state_device="/dev/sdb"
     else
-      state_device="$(ssh -i "${SSH_KEY_BASE}" "${remote_host}" \
+      state_device="$(ssh "${SSH_OPTS[@]}" -i "${SSH_KEY_BASE}" "${remote_host}" \
         'root_src=$(findmnt -n -o SOURCE / || true); root_disk=$(lsblk -no PKNAME "$root_src" 2>/dev/null || true); lsblk -dn -o NAME,TYPE | awk -v root="$root_disk" '"'"'$2=="disk" && $1!=root {print "/dev/"$1; exit}'"'"'')"
     fi
   fi
@@ -139,6 +144,6 @@ if [[ "${DISK}" == "NEW" ]]; then
     exit 2
   fi
 
-  ssh -i "${SSH_KEY_BASE}" "${remote_host}" \
+  ssh "${SSH_OPTS[@]}" -i "${SSH_KEY_BASE}" "${remote_host}" \
     "sudo mkdir -p /data; sudo blkid '${state_device}' >/dev/null 2>&1 || sudo mkfs.ext4 '${state_device}'; mountpoint -q /data || sudo mount '${state_device}' /data"
 fi

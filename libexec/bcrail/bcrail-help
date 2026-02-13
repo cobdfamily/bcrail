@@ -6,6 +6,7 @@ Usage: bcrail <command>
 
 Commands:
   config       Print resolved runtime configuration
+  docker ...   Run remote docker command in active bcrail context
   getcontext   Print the currently selected bcrail context
   resolve-incus-dns  Resolve IPv4 address for an Incus instance name
   setup        Setup the BCRail environment on a new host

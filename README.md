@@ -67,6 +67,16 @@ Example:
 bcrail config
 ```
 
+### `docker ...` helper
+
+The packaged `docker` command is a wrapper that executes Docker on the active bcrail context over SSH.
+
+Example:
+
+```bash
+docker ps
+```
+
 ## Configuration
 
 `bcrail` reads environment variables in this order:

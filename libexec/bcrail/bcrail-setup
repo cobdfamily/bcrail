@@ -31,7 +31,13 @@ require_command() {
   fi
 }
 
-require_command "${BCRAIL_CMD}"
+if [[ "${BCRAIL_CMD}" != "bcrail" && ! -x "${BCRAIL_CMD}" ]]; then
+  echo "Required command not found: ${BCRAIL_CMD}" >&2
+  exit 2
+fi
+if [[ "${BCRAIL_CMD}" == "bcrail" ]]; then
+  require_command bcrail
+fi
 require_command incus
 require_command tar
 require_command wget
