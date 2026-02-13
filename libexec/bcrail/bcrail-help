@@ -6,6 +6,7 @@ Usage: bcrail <command>
 
 Commands:
   config       Print resolved runtime configuration
+  getcontext   Print the currently selected bcrail context
   setup        Setup the BCRail environment on a new host
-  setcontext   Initialize a new bcrail context
+  setcontext   Initialize and select a bcrail context
 USAGE
