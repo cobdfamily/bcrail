@@ -19,7 +19,14 @@ CONTEXT_NAME="bcrail-${CONTEXT_BASE}";
 CONTEXT_PATH="${BCRAIL_STATE_DIR}/contexts/${CONTEXT_BASE}";
 VERSION="${2:-current}";
 
+echo "${CONTEXT_BASE}" > ~/.bcrail
+
 echo "Initializing the ${CONTEXT_NAME} context..."
+
+if [[ -d "/var/lib/cprail/contexts/${CONTEXT_BASE}" ]]; then
+  echo "Context ${CONTEXT_NAME} already exists at /var/lib/cprail/contexts/${CONTEXT_BASE}; nothing to do."
+  exit 0
+fi
 
 mkdir -p "${CONTEXT_PATH}"
 chmod 755 "${CONTEXT_PATH}"
