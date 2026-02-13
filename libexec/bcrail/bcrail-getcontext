@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "${$(cat ~/.bcrail)-:default}";
+context_file="${BCRAIL_CONTEXT_FILE:-${HOME}/.bcrail}"
+
+if [[ -f "${context_file}" ]]; then
+  context="$(tr -d '[:space:]' < "${context_file}")"
+  if [[ -n "${context}" ]]; then
+    echo "${context}"
+    exit 0
+  fi
+fi
+
+echo "default"

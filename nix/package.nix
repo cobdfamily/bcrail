@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, makeWrapper, bash, coreutils, gnused, gnutar, gzip, jq, openssh, wget, incus }:
+{ lib, stdenvNoCC, makeWrapper, bash, coreutils, gawk, gnused, gnutar, gzip, jq, openssh, wget, incus }:
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "bcrail";
@@ -24,6 +24,21 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       --prefix PATH : ${lib.makeBinPath [
         bash
         coreutils
+        gawk
+        gnused
+        gnutar
+        gzip
+        jq
+        openssh
+        wget
+        incus
+      ]}
+
+    wrapProgram "$out/bin/docker" \
+      --prefix PATH : ${lib.makeBinPath [
+        bash
+        coreutils
+        gawk
         gnused
         gnutar
         gzip

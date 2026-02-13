@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-context="$(bcrail getcontext)"
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -x "${BIN_DIR}/bcrail" ]]; then
+  BCRAIL_BIN="${BIN_DIR}/bcrail"
+else
+  BCRAIL_BIN="bcrail"
+fi
+
+if ! command -v ssh >/dev/null 2>&1; then
+  echo "Required command not found: ssh" >&2
+  exit 2
+fi
+
+context="$("${BCRAIL_BIN}" getcontext)"
 host="bcrail-${context}"
 key="/var/lib/bcrail/contexts/${context}/keys/${host}"
-dns="$(bcrail resolve-incus-dns "${host}")"
+dns="$("${BCRAIL_BIN}" resolve-incus-dns "${host}")"
 
-# Build a shell-safe remote command preserving argument boundaries.
+if [[ ! -f "${key}" ]]; then
+  echo "SSH key not found: ${key}" >&2
+  exit 2
+fi
+
 remote_cmd=(docker "$@")
 ssh -i "${key}" "vancouver@${dns}" "$(printf '%q ' "${remote_cmd[@]}")"

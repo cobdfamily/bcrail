@@ -36,6 +36,16 @@ Example:
 bcrail getcontext
 ```
 
+### `bcrail resolve-incus-dns <instance>`
+
+Resolves the current IPv4 address for an Incus instance name.
+
+Example:
+
+```bash
+bcrail resolve-incus-dns bcrail-default
+```
+
 ### `bcrail config`
 
 Prints the resolved runtime configuration as `KEY=value` lines.
@@ -69,6 +79,7 @@ Relevant variables:
 - `BCRAIL_STORAGE_POOL` (default: `default`)
 - `BCRAIL_STATE_DIR` (default: `/var/lib/bcrail`)
 - `BCRAIL_CONFIG_DIR` (default: `/etc/bcrail`)
+- `BCRAIL_CONTEXT_FILE` (default: `~/.bcrail`)
 
 Show the effective resolved values with:
 

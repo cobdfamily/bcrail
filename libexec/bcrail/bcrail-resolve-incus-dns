@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+instance="${1:-}"
+if [[ -z "${instance}" ]]; then
+  echo "Usage: bcrail resolve-incus-dns <instance>" >&2
+  exit 2
+fi
+
+if ! command -v incus >/dev/null 2>&1; then
+  echo "Required command not found: incus" >&2
+  exit 2
+fi
+
+ip="$(
+  incus list --format csv -c n4 \
+    | awk -F, -v name="${instance}" '$1 == name {print $2; exit}' \
+    | awk '{print $1}'
+)"
+
+if [[ -z "${ip}" ]]; then
+  echo "Could not resolve IP for instance: ${instance}" >&2
+  exit 1
+fi
+
+echo "${ip}"

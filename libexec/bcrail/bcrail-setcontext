@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 BCRAIL_STATE_DIR="${BCRAIL_STATE_DIR:-/var/lib/bcrail}"
 BCRAIL_CONFIG_DIR="${BCRAIL_CONFIG_DIR:-/etc/bcrail}"
 BCRAIL_LOCOMOTIVE_ENV="${BCRAIL_LOCOMOTIVE_ENV:-${BCRAIL_CONFIG_DIR}/locomotive.env}"
 BCRAIL_STORAGE_POOL="${BCRAIL_STORAGE_POOL:-default}"
+BCRAIL_CONTEXT_FILE="${BCRAIL_CONTEXT_FILE:-${HOME}/.bcrail}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -x "${SCRIPT_DIR}/../../bin/bcrail" ]]; then
+  BCRAIL_CMD="${SCRIPT_DIR}/../../bin/bcrail"
+else
+  BCRAIL_CMD="bcrail"
+fi
 
 if [[ -f "${BCRAIL_LOCOMOTIVE_ENV}" ]]; then
   set -a
@@ -14,91 +20,106 @@ if [[ -f "${BCRAIL_LOCOMOTIVE_ENV}" ]]; then
   set +a
 fi
 
-CONTEXT_BASE="${1:-default}";
-CONTEXT_NAME="bcrail-${CONTEXT_BASE}";
-CONTEXT_PATH="${BCRAIL_STATE_DIR}/contexts/${CONTEXT_BASE}";
-VERSION="${2:-current}";
+require_command() {
+  local cmd="$1"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "Required command not found: ${cmd}" >&2
+    exit 2
+  fi
+}
 
-echo "${CONTEXT_BASE}" > ~/.bcrail
+require_command incus
+require_command jq
+require_command ssh
+require_command ssh-keygen
+
+CONTEXT_BASE="${1:-default}"
+CONTEXT_NAME="bcrail-${CONTEXT_BASE}"
+CONTEXT_PATH="${BCRAIL_STATE_DIR}/contexts/${CONTEXT_BASE}"
+VERSION="${2:-current}"
+
+mkdir -p "$(dirname "${BCRAIL_CONTEXT_FILE}")"
+printf '%s\n' "${CONTEXT_BASE}" > "${BCRAIL_CONTEXT_FILE}"
 
 echo "Initializing the ${CONTEXT_NAME} context..."
 
-if [[ -d "/var/lib/cprail/contexts/${CONTEXT_BASE}" ]]; then
-  echo "Context ${CONTEXT_NAME} already exists at /var/lib/cprail/contexts/${CONTEXT_BASE}; nothing to do."
-  exit 0
+mkdir -p "${CONTEXT_PATH}/stacks" "${CONTEXT_PATH}/keys" "${CONTEXT_PATH}/config"
+chmod 755 "${CONTEXT_PATH}" "${CONTEXT_PATH}/keys"
+printf '%s\n' "${CONTEXT_NAME}" > "${CONTEXT_PATH}/.context"
+
+if [[ ! -f "${BCRAIL_CONFIG_DIR}/ignition.json" ]]; then
+  echo "Missing ${BCRAIL_CONFIG_DIR}/ignition.json; aborting." >&2
+  exit 2
 fi
-
-mkdir -p "${CONTEXT_PATH}"
-chmod 755 "${CONTEXT_PATH}"
-
-cd "${CONTEXT_PATH}"
-
-mkdir stacks
-mkdir keys
-chmod 755 keys
-
-mkdir config
-
-echo "${CONTEXT_NAME}" >.context
 
 echo "Generating keys..."
 SSH_KEY_BASE="${CONTEXT_PATH}/keys/${CONTEXT_NAME}"
-
-ssh-keygen -t ed25519 \
-  -f "$SSH_KEY_BASE" \
-  -N ""
-
-KEY="$(cat ${SSH_KEY_BASE}.pub)"
-
-jq --arg key "$KEY" \
-   '.passwd.users[].sshAuthorizedKeys = [$key]' \
-   "${BCRAIL_CONFIG_DIR}/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
-
-sed -i "s/CONTEXT_PLACEHOLDER/${CONTEXT_BASE}/g" "${CONTEXT_PATH}/config/ignition.json"
-
-echo "Initializing new instance derived from the bcrail profile..."
-
-incus create --profile bcrail --vm local:"flatcar/${VERSION}" "${CONTEXT_NAME}"
-
-echo "Creating the mountpoint for the ${CONTEXT_NAME} context's stacks..."
-incus config device add "${CONTEXT_NAME}" stacks disk \
-  source=${CONTEXT_PATH}/stacks \
-  path=${CONTEXT_PATH}/stacks
-
-POOL="${BCRAIL_STORAGE_POOL}";
-VOL="${CONTEXT_NAME}-state";
-SIZE="${SIZE:-64GiB}";                   # volume size
-DISK="NEW";
-
-echo "Ensuring storage volume exists..."
-if incus storage volume show "$POOL" "$VOL" >/dev/null 2>&1; then
-  echo "OK: volume exists: $POOL/$VOL"
-  DISK="EXISTS";
+if [[ ! -f "${SSH_KEY_BASE}" || ! -f "${SSH_KEY_BASE}.pub" ]]; then
+  ssh-keygen -t ed25519 -f "${SSH_KEY_BASE}" -N ""
 else
-  echo "Creating volume: $POOL/$VOL size=$SIZE"
-  incus storage volume create "$POOL" "$VOL" --type=block size="$SIZE"
+  echo "Using existing keys: ${SSH_KEY_BASE}(.pub)"
 fi
 
-echo "Attaching volume to ${CONTEXT_NAME} as device '$VOL'"
-incus config device add "${CONTEXT_NAME}" state disk pool="$POOL" source="$VOL"
+KEY="$(cat "${SSH_KEY_BASE}.pub")"
+jq --arg key "${KEY}" \
+   '.passwd.users[].sshAuthorizedKeys = [$key]' \
+   "${BCRAIL_CONFIG_DIR}/ignition.json" > "${CONTEXT_PATH}/config/ignition.json"
+sed -i "s/CONTEXT_PLACEHOLDER/${CONTEXT_BASE}/g" "${CONTEXT_PATH}/config/ignition.json"
+
+echo "Ensuring instance ${CONTEXT_NAME} exists..."
+if ! incus info "${CONTEXT_NAME}" >/dev/null 2>&1; then
+  incus create --profile bcrail --vm "local:flatcar/${VERSION}" "${CONTEXT_NAME}"
+else
+  echo "Instance already exists: ${CONTEXT_NAME}"
+fi
+
+echo "Configuring stacks mount..."
+if incus config device show "${CONTEXT_NAME}" | grep -q '^stacks:'; then
+  incus config device remove "${CONTEXT_NAME}" stacks || true
+fi
+incus config device add "${CONTEXT_NAME}" stacks disk \
+  source="${CONTEXT_PATH}/stacks" \
+  path=/stacks
+
+POOL="${BCRAIL_STORAGE_POOL}"
+VOL="${CONTEXT_NAME}-state"
+SIZE="${SIZE:-64GiB}"
+DISK="EXISTS"
+
+echo "Ensuring storage volume exists..."
+if ! incus storage volume show "${POOL}" "${VOL}" >/dev/null 2>&1; then
+  echo "Creating volume: ${POOL}/${VOL} size=${SIZE}"
+  incus storage volume create "${POOL}" "${VOL}" --type=block size="${SIZE}"
+  DISK="NEW"
+else
+  echo "OK: volume exists: ${POOL}/${VOL}"
+fi
+
+echo "Attaching volume to ${CONTEXT_NAME}..."
+if incus config device show "${CONTEXT_NAME}" | grep -q '^state:'; then
+  incus config device remove "${CONTEXT_NAME}" state || true
+fi
+incus config device add "${CONTEXT_NAME}" state disk pool="${POOL}" source="${VOL}"
 
 echo "Adding Ignition config..."
-incus config set "${CONTEXT_NAME}" raw.qemu - <<EOF
--fw_cfg name=opt/org.flatcar-linux/config,file=${CONTEXT_PATH}/config/ignition.json
-EOF
+incus config set "${CONTEXT_NAME}" raw.qemu "-fw_cfg name=opt/org.flatcar-linux/config,file=${CONTEXT_PATH}/config/ignition.json"
 
 echo "Adapting apparmor..."
-incus config set "${CONTEXT_NAME}" raw.apparmor - <<EOF
-${CONTEXT_PATH}/config/ r,
-${CONTEXT_PATH}/config/** r,
-EOF
+incus config set "${CONTEXT_NAME}" raw.apparmor "${CONTEXT_PATH}/config/ r,
+${CONTEXT_PATH}/config/** r,"
 
-echo "Starting the ${CONTEXT_NAME} context..."
-incus start "${CONTEXT_NAME}"
+echo "Starting ${CONTEXT_NAME}..."
+incus start "${CONTEXT_NAME}" >/dev/null 2>&1 || true
 
-if [ "$DISK" = "NEW" ]; then
+if [[ "${DISK}" == "NEW" ]]; then
   echo "Formatting state disk for the context..."
-  sleep 120
-  ssh -i "${SSH_KEY_BASE}" vancouver@"$(resolve-incus-dns "${CONTEXT_NAME}")" \
+  for _ in $(seq 1 30); do
+    if ssh -o BatchMode=yes -o ConnectTimeout=5 -i "${SSH_KEY_BASE}" \
+      "vancouver@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")" true >/dev/null 2>&1; then
+      break
+    fi
+    sleep 4
+  done
+  ssh -i "${SSH_KEY_BASE}" "vancouver@$("${BCRAIL_CMD}" resolve-incus-dns "${CONTEXT_NAME}")" \
     "sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb /data"
 fi
